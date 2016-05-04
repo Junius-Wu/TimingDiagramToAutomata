@@ -33,10 +33,7 @@ public class Write {
 				global_declarations.toString().length() - 1);
 		System.out.println(global_declarations.toString());
 		declaration.setText("chan" + " " + sdeclaration + ";clock x;");//写入全局变量
-		//合并templates
-		mergeTemplates(temPlates);
-		//处理消息的夸对象
-		outMessageConnectAutomatas(temPlates.get(0));
+		
 		Iterator<UppaalTemPlate> templateIterator = temPlates.iterator();
 
 		while (templateIterator.hasNext()) {//写入template
@@ -146,56 +143,6 @@ public class Write {
 		// System.out.println(doString);
 		System.out.println("转换完成!");
 
-	}
-
-	private static void mergeTemplates(ArrayList<UppaalTemPlate> temPlates) {
-		UppaalTemPlate template0 = temPlates.get(0);
-		for(int i = 1;i < temPlates.size(); i++) {
-			template0.getLocations().addAll(temPlates.get(i).getLocations());
-			template0.getTransitions().addAll(temPlates.get(i).getTransitions());
-		}
-	}
-	
-	private static void outMessageConnectAutomatas(UppaalTemPlate uppaalTemPlate) {
-		ArrayList<UppaalTransition> outTransitions = new ArrayList<UppaalTransition>();
-		//找出外部message放到outTransition
-		for(UppaalTransition transitionI : uppaalTemPlate.getTransitions()) {
-			boolean out = false;
-			int i = 0;
-			String[] tempStrings = transitionI.getKind();
-			while (tempStrings[i] != null) {//判断是否是外部message
-				if (tempStrings[i].equals("synchronisation")) 
-					{out = true;break;}
-				i++;
-			}
-			transitionI.setOutKindIndex(i);
-			if (out) {//copy一份到outTransition
-				UppaalTransition newTransition = (UppaalTransition)transitionI.clone();
-				outTransitions.add(newTransition);
-			}
-		}
-		//遍历outTransition 新增自动机之间的连接transition
-		for(UppaalTransition transitionI : outTransitions) {
-			String nameI = transitionI.getNameText()[transitionI.outKindIndex];
-			int lengthI = nameI.length();
-			for(UppaalTransition transitionJ : outTransitions) {
-				String nameJ = transitionJ.getNameText()[transitionJ.outKindIndex];
-				int lengthJ = nameJ.length();
-				if (nameI.substring(lengthI-1, lengthI).equals("!") &&
-						nameJ.substring(lengthJ-1, lengthJ).equals("?") &&
-						transitionI.getEAid().equals(transitionJ.getEAid()) ) {
-					//是相同的消息不同形态 cofee! 和 cofee?
-					UppaalTransition addTransition = (UppaalTransition)transitionI.clone();
-					//cofee! -> cofee
-					addTransition.getNameText()[addTransition.outKindIndex] = addTransition.getNameText()[addTransition.outKindIndex].substring(0, lengthI-1);
-					addTransition.setSourceId(transitionI.getSourceId());
-					addTransition.setTargetId(transitionJ.getSourceId());
-					uppaalTemPlate.getTransitions().add(addTransition);
-				}
-			}
-		}
-		
-	
 	}
 
 }

@@ -1,6 +1,9 @@
 package UML;
 
 public class UppaalLocation {
+	
+	boolean needForAutomata = true;
+	
 	Boolean init=false;
 	public Boolean getInit() {
 		return init;
