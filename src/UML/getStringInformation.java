@@ -31,8 +31,14 @@ public static String getReceiveTime(String string)
 	temp=str[0];
 	
 	str1=temp.split("=");
+	for(int i=0;i<str.length;i++)
+	{temp=str[i];
+	//System.out.println(temp);	
+	str1=temp.split("=");
 	//System.out.println(str1[str1.length-1]);
-	return str1[str1.length-1];
+	if(str1[0].contains("TE"))
+	return str1[str1.length-1];}
+	return null;
 	
 }
 

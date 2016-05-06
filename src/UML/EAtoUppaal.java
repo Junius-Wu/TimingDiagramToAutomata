@@ -30,7 +30,7 @@ public class EAtoUppaal {
 		//2.读取uml.xml中的数据-------------------------------------------------------------------------------------------
 		SAXReader reader = new SAXReader();// 获取解析器
 
-		Document dom = reader.read("uml.xml");// 解析XML获取代表整个文档的dom对象
+		Document dom = reader.read("0.xml");// 解析XML获取代表整个文档的dom对象
 
 		Element root = dom.getRootElement();// 获取根节点
 
@@ -86,6 +86,7 @@ public class EAtoUppaal {
 				UppaalTransition transition = new UppaalTransition();
 				location.setLineEAID(line.getLifelineID());
 				location.setName(State.getName()+":"+line.getName());
+				System.out.println(location.getName());
 				
 				String print_transition_name= new String();  //用于测试 记录状态转移的name
 				//3.1.1初始状态
@@ -215,6 +216,7 @@ public class EAtoUppaal {
 						transition.setFromName(sourceIDsendTime_connector.get(SendKeyString).getSourceName());
 						transition.setToName(sourceIDsendTime_connector.get(SendKeyString).getTragetName());					 
 						
+						
 					} 
 					//3.1.4判断FL（上一个状态）是否是massage的接受方
 					String ReceiveKeyString = "#tragetIdIs"+FL.getLineEAID()+ "#receiveTimeIs" + State.getValue();
@@ -238,13 +240,13 @@ public class EAtoUppaal {
 						 transition.setToName(tragertIDreceiveTime_connector.get(ReceiveKeyString).getTragetName());					 
 					} 
 					//添加所有包括重复的迁移 （时间不同）
-					template.transitions.add(transition);
-					
-					System.out.println("添加"+FL.Name+"--"+print_transition_name+"("+State.getEvent()+")"+"->"+location.Name);
+//					template.transitions.add(transition);
+//					
+//					System.out.println("添加"+FL.Name+"--"+print_transition_name+"("+State.getEvent()+")"+"->"+location.Name);
 					
 					
 					//添加所有包括不重复的迁移 
-					/*//3.1.5 判断是否是已经存在的迁移
+					//3.1.5 判断是否是已经存在的迁移
 					String STKeyString="#nameSIs"+transition.nameS+"#nameTIs"+transition.nameT;
 					
 																								
@@ -260,7 +262,7 @@ public class EAtoUppaal {
 					}
 					
 					//
-*/					
+					
 					
 					
 					FL = location;
@@ -274,14 +276,68 @@ public class EAtoUppaal {
 		}
 		//3.遍历所有生命线end-----------------------------------------------------------------------------------------------
 		
-		
+				//合并templates
+				mergeTemplates(temPlates);
+				//处理消息的夸对象
+				outMessageConnectAutomatas(temPlates.get(0));
+				
 		//4.写入到UPPAAL.xml中----------------------------------------------------------------------------------------------
 		Write.creatXML("UPPAAL.xml", global_declarations,
 				template_instantiations, temPlates);
 		//4.写入到UPPAAL.xml中end-------------------------------------------------------------------------------------------
 		
 	}
+	private static void mergeTemplates(ArrayList<UppaalTemPlate> temPlates) {
+		UppaalTemPlate template0 = temPlates.get(0);
+		for(int i = 1;i < temPlates.size(); i++) {
+			template0.getLocations().addAll(temPlates.get(i).getLocations());
+			template0.getTransitions().addAll(temPlates.get(i).getTransitions());
+		}
+	}
 	
+	private static void outMessageConnectAutomatas(UppaalTemPlate uppaalTemPlate) {
+		ArrayList<UppaalTransition> outTransitions = new ArrayList<UppaalTransition>();
+		//找出外部message放到outTransition
+		for(UppaalTransition transitionI : uppaalTemPlate.getTransitions()) {
+			boolean out = false;
+			int i = 0;
+			String[] tempStrings = transitionI.getKind();
+			while (tempStrings[i] != null) {//判断是否是外部message
+				if (tempStrings[i].equals("synchronisation")) 
+					{out = true;break;}
+				i++;
+			}
+			transitionI.setOutKindIndex(i);
+			if (out) {//copy一份到outTransition
+				//UppaalTransition newTransition = (UppaalTransition)transitionI.clone();并不用克隆
+				outTransitions.add(transitionI);
+			}
+		}
+		//遍历outTransition 新增自动机之间的连接transition
+		for(UppaalTransition transitionI : outTransitions) {
+			String nameI = transitionI.getNameText()[transitionI.outKindIndex];
+			int lengthI = nameI.length();
+			for(UppaalTransition transitionJ : outTransitions) {
+				String nameJ = transitionJ.getNameText()[transitionJ.outKindIndex];
+				int lengthJ = nameJ.length();
+				if (nameI.substring(lengthI-1, lengthI).equals("!") &&
+						nameJ.substring(lengthJ-1, lengthJ).equals("?") &&
+						transitionI.getEAid().equals(transitionJ.getEAid()) ) {
+					//是相同的消息不同形态 cofee! 和 cofee?
+					UppaalTransition addTransition = (UppaalTransition)transitionI.clone();
+					
+					addTransition.getNameText()[addTransition.outKindIndex] = addTransition.getNameText()[addTransition.outKindIndex];
+					//cofee! -> cofee//.substring(0, lengthI-1);
+					addTransition.setSourceId(transitionI.getSourceId());
+					addTransition.setTargetId(transitionJ.getSourceId());
+					uppaalTemPlate.getTransitions().add(addTransition);
+					
+					//去掉对象内的！消息 
+					uppaalTemPlate.getTransitions().remove(transitionI);
+				}
+			}
+		}
+	}
 	public static UppaalLocation findState(ArrayList<UppaalLocation> locations,
 			UppaalLocation location) {
 		Iterator<UppaalLocation> LIterator = locations.iterator();
