@@ -1,7 +1,18 @@
 package UML;
 
+import java.util.ArrayList;
+
 public class UppaalLocation {
 	
+	ArrayList<Integer> timeStarts = new ArrayList<Integer>();
+	
+	
+	public ArrayList<Integer> getTimeStarts() {
+		return timeStarts;
+	}
+	public void setTimeStarts(ArrayList<Integer> timeStarts) {
+		this.timeStarts = timeStarts;
+	}
 	boolean needForAutomata = true;
 	
 	Boolean init=false;

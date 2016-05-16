@@ -3,6 +3,8 @@ package UML;
 import java.util.ArrayList;
 
 public class UppaalTemPlate {
+
+	String id;
 String Name;
 public String getName() {
 	return Name;

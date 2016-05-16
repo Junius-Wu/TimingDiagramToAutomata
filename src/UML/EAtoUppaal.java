@@ -81,7 +81,14 @@ public class EAtoUppaal {
 			}
 			//2.读取uml.xml中的数据end----------------------------------------------------------------------------------------
 			
+			//EX 存储  消息（不是转折点消息， 从某个状态发出 ，但这个状态没有发生改变）
+			ArrayList<connector> EXconnectorsSender = new ArrayList<connector>();
+			EXconnectorsSender.addAll(Connectors);
 			
+			//EX 存储  消息（不是转折点消息， 由某个状态发接受 ，但这个状态没有发生改变）    ..和上一个list合并可以得到需要添加的消息（接受或者发送状态没有发生改变）
+			ArrayList<connector> EXconnectorsReciever = new ArrayList<connector>();
+			
+			EXconnectorsReciever.addAll(Connectors);
 			//3.遍历所有生命线--------------------------------------------------------------------------------------------------
 			Iterator<TimingLifeline> lineIterator = Lifelines.iterator();
 	
@@ -93,6 +100,7 @@ public class EAtoUppaal {
 				template_instantiations.add(line.getName());// 第4步:在UPRAAL中声明一个Template取名为ID
 				UppaalTemPlate template = new UppaalTemPlate();
 				template.setName(line.getName());
+				template.id = line.getLifelineID();
 				System.out.println("现在检测名为" + line.getName() + "的生命线");
 				
 				/*对当前template 旧location和旧transition优化查找*/	
@@ -105,6 +113,7 @@ public class EAtoUppaal {
 					
 					lineInfo State = lineState.next();
 					UppaalLocation location = new UppaalLocation();
+					location.timeStarts.add(Integer.valueOf(State.getValue()));//添加状态所在的开始时间
 					UppaalTransition transition = new UppaalTransition();
 					location.setLineEAID(line.getLifelineID());
 					location.setName(State.getName()+":"+line.getName());
@@ -199,6 +208,7 @@ public class EAtoUppaal {
 						} else {
 							//3.1.2.2非初始状态  是旧状态
 							location = name_oldLocations.get(location.Name);
+							location.timeStarts.add(Integer.valueOf(State.getValue()));//添加状态所在的开始时间
 							transition.setSourceId(FL.getId());
 							transition.setTargetId(location.getId());
 							transition.setNameS(FL.getName());
@@ -236,9 +246,8 @@ public class EAtoUppaal {
 							 transition.setTime(State.getValue());//为了模型验证增加的发送时间记录
 							 transition.setEAid(EAid);
 							transition.setFromName(sourceIDsendTime_connector.get(SendKeyString).getSourceName());
-							transition.setToName(sourceIDsendTime_connector.get(SendKeyString).getTragetName());					 
-							
-							
+							transition.setToName(sourceIDsendTime_connector.get(SendKeyString).getTragetName());
+							EXconnectorsSender.remove(sourceIDsendTime_connector.get(SendKeyString));
 						} 
 						//3.1.4判断FL（上一个状态）是否是massage的接受方
 						String ReceiveKeyString = "#tragetIdIs"+FL.getLineEAID()+ "#receiveTimeIs" + State.getValue();
@@ -260,6 +269,7 @@ public class EAtoUppaal {
 							 transition.setEAid(EAid);
 							 transition.setFromName(tragertIDreceiveTime_connector.get(ReceiveKeyString).getSourceName());					 							
 							 transition.setToName(tragertIDreceiveTime_connector.get(ReceiveKeyString).getTragetName());					 
+							 EXconnectorsReciever.remove(tragertIDreceiveTime_connector.get(ReceiveKeyString));
 						} 
 						//添加所有包括重复的迁移 （时间不同）
 	//					template.transitions.add(transition);
@@ -283,10 +293,6 @@ public class EAtoUppaal {
 							System.out.println("已经存在"+FL.Name+"--"+print_transition_name+"("+State.getEvent()+")"+"->"+location.Name);
 						}
 						
-						//
-						
-						
-						
 						FL = location;
 					}
 	
@@ -298,10 +304,20 @@ public class EAtoUppaal {
 			}
 			//3.遍历所有生命线end-----------------------------------------------------------------------------------------------
 			
+					//ex.1添加移除后剩下的消息（不是途中的转折点消息， 从某个状态发出 ，但这个状态没有发生改变）
+					HashSet<connector> EXconnectors = new HashSet<connector>();
+					EXconnectors.addAll(EXconnectorsReciever);
+					EXconnectors.addAll(EXconnectorsSender);
+					ArrayList<UppaalTransition> EXTransitions = new ArrayList<UppaalTransition>();
+					addEXconnectors(EXconnectors,temPlates,EXTransitions);//connector->transition
+					
 					//合并templates
 					mergeTemplates(temPlates);
 					//处理消息的夸对象
 					outMessageConnectAutomatas(temPlates.get(0));
+					//ex.2 添加剩下的消息
+					temPlates.get(0).getTransitions().addAll(EXTransitions);
+					
 					
 			//4.写入到UPPAAL.xml中----------------------------------------------------------------------------------------------
 			Write.creatXML(diagramsData.getName() + ".xml", global_declarations,
@@ -309,6 +325,61 @@ public class EAtoUppaal {
 			//4.写入到UPPAAL.xml中end-------------------------------------------------------------------------------------------
 		}//一张图完毕
 	}
+	
+
+	private static void addEXconnectors(HashSet<connector> eXconnectors, ArrayList<UppaalTemPlate> temPlates,
+			ArrayList<UppaalTransition> eXTransitions) {
+		
+		for(connector Connector : eXconnectors) {
+			
+			String sourceId = Connector.getSourceId();
+			UppaalTemPlate sourceTemplate = new UppaalTemPlate();
+			String targetId = Connector.getTragetId();
+			UppaalTemPlate targetTemplate = new UppaalTemPlate();
+			int sendTime = Integer.valueOf(Connector.getSendTime());
+			int recieveTime = Integer.valueOf(Connector.getReceiveTime());
+			
+			UppaalTransition transition = new UppaalTransition();
+			
+			//找到对应的template
+			for(UppaalTemPlate template: temPlates) {
+				if (template.id.equals(sourceId)) {
+					sourceTemplate = template;
+				} else if (template.id.equals(targetId)) {
+					targetTemplate = template;
+				}
+			}
+			
+			transition.setFromName(sourceTemplate.getName());
+			transition.setToName(targetTemplate.getName());
+			transition.setKind(new String[]{"synchronisation",null,null,null,null});
+			transition.setNameText(new String[]{Connector.getName(),null,null,null,null});
+			transition.setTime(Connector.getSendTime());
+			//从sourceTemplate中找到sourceLocation
+			int maxTime = -1;
+			for(UppaalLocation location : sourceTemplate.getLocations()) {
+				for(int time:location.getTimeStarts()) {
+					if (time > maxTime && sendTime > time) {
+						maxTime = time;
+						transition.setSourceId(location.getId());
+					}
+				}
+			}
+			maxTime = -1;
+			for(UppaalLocation location : targetTemplate.getLocations()) {
+				for(int time:location.getTimeStarts()) {
+					if (time > maxTime && recieveTime > time) {
+						maxTime = time;
+						transition.setTargetId(location.getId());
+					}
+				}
+			}
+			eXTransitions.add(transition);
+		}
+		
+	}
+
+
 	private static void mergeTemplates(ArrayList<UppaalTemPlate> temPlates) {
 		UppaalTemPlate template0 = temPlates.get(0);
 		for(int i = 1;i < temPlates.size(); i++) {
